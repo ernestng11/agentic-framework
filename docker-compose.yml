@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  agentic-system:
+    build: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - A2A_API_KEY=${A2A_API_KEY}
+      - DEMO_MODE=false
+      - TEST_MODE=false
+    ports:
+      - "8000:8000"
+    depends_on:
+      - agent-registry
+      - redis
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  agent-registry:
+    image: nginx:alpine
+    ports:
+      - "9000:80"
+    volumes:
+      - ./registry-config:/etc/nginx/conf.d
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  mcp-database-server:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=agentic_db
+      - POSTGRES_USER=agent_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Optional: Web UI for system monitoring
+  monitoring:
+    build: 
+      context: .
+      dockerfile: Dockerfile.monitoring
+    ports:
+      - "3000:3000"
+    environment:
+      - API_URL=http://agentic-system:8000
+    depends_on:
+      - agentic-system
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
+
+networks:
+  default:
+    name: agentic-network 

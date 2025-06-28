@@ -1,0 +1,68 @@
+llm_providers:
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    default_model: "gpt-4"
+    default_temperature: 0.7
+  
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+    default_model: "claude-3-sonnet"
+    default_temperature: 0.7
+
+mcp_servers:
+  - name: "file-system"
+    transport: "stdio"
+    command: "python"
+    args: ["mcp_servers/filesystem_server.py"]
+  
+  - name: "database"
+    transport: "http"
+    url: "http://localhost:8080/mcp"
+
+a2a_config:
+  agent_registry_url: "http://localhost:9000/registry"
+  authentication:
+    type: "api_key"
+    key: ${A2A_API_KEY}
+
+agents:
+  research:
+    llm_provider: "openai"
+    capabilities: ["web_search", "data_analysis"]
+    tools: ["web_search", "pdf_reader", "database_query"]
+  
+  planning:
+    llm_provider: "anthropic"
+    capabilities: ["task_decomposition", "workflow_planning"]
+    tools: ["calendar", "project_management"]
+
+# System Configuration
+system:
+  port: 8000
+  host: "localhost"
+  debug: false
+  log_level: "INFO"
+
+# Tool Configuration
+tools:
+  web_search:
+    max_results: 10
+    timeout: 30
+  
+  database:
+    connection_timeout: 5
+    query_timeout: 30
+  
+  file_reader:
+    max_file_size: "10MB"
+    supported_types: ["pdf", "txt", "json", "csv"]
+
+# Security Configuration
+security:
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+  
+  api_keys:
+    required: true
+    validation: true 
