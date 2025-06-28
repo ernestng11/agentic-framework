@@ -67,11 +67,10 @@ class DatabaseQueryTool:
                 return [user for user in self.mock_database["users"] if user["role"] == "admin"]
             return self.mock_database["users"]
         
-                elif "products" in query_lower:
+        elif "products" in query_lower:
             if "electronics" in query_lower:
                 return [product for product in self.mock_database["products"] if product["category"] == "electronics"]
             return self.mock_database["products"]
-        
         else:
             return [{"error": f"Could not parse query: {query}"}]
 
