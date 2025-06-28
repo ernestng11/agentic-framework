@@ -1,0 +1,3 @@
+[submodule "heurist-mesh-mcp-server"]
+	path = heurist-mesh-mcp-server
+	url = https://github.com/heurist-network/heurist-mesh-mcp-server.git
