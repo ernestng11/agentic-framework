@@ -15,12 +15,26 @@ from tools.tool_manager import ToolManager
 from tools.implementations import get_default_tools
 
 async def setup_llm_providers() -> LLMProviderFactory:
-    """Setup LLM providers with configuration"""
+    """Setup LLM providers with validation"""
     factory = LLMProviderFactory()
     
-    # The providers are already registered in the factory
-    # In production, you would configure API keys here
-    print("✅ LLM providers initialized")
+    print("🔍 Validating LLM provider API keys...")
+    validation_status = factory.validate_all_providers()
+    
+    for provider, is_valid in validation_status.items():
+        if is_valid:
+            print(f"   ✅ {provider}: API key found")
+        else:
+            print(f"   ❌ {provider}: API key missing or invalid")
+    
+    # Check if at least one provider is available
+    if not any(validation_status.values()):
+        print("⚠️  Warning: No LLM providers have valid API keys!")
+        print("   Please set environment variables:")
+        print("   - OPENAI_API_KEY for OpenAI")
+        print("   - ANTHROPIC_API_KEY for Anthropic")
+    
+    print("✅ LLM provider factory initialized")
     return factory
 
 async def setup_mcp_integration() -> tuple[MCPServerManager, MCPClientManager]:
@@ -76,7 +90,7 @@ async def create_agents(llm_factory: LLMProviderFactory,
     research_client = A2AClient("research-001", registry)
     planning_client = A2AClient("planning-001", registry)
     
-    # Create agents with different LLM providers
+    # Try to create research agent with OpenAI
     try:
         research_agent = ResearchAgent(
             "research-001",
@@ -86,10 +100,25 @@ async def create_agents(llm_factory: LLMProviderFactory,
         )
         await research_agent.initialize()
         agents["research"] = research_agent
-        print("✅ Research agent created and initialized")
+        print("✅ Research agent created with OpenAI provider")
     except Exception as e:
-        print(f"⚠️  Could not initialize research agent: {e}")
+        print(f"⚠️  Could not initialize research agent with OpenAI: {e}")
+        
+        # Try fallback to Anthropic
+        try:
+            research_agent = ResearchAgent(
+                "research-001",
+                llm_factory.get_provider("anthropic"),
+                mcp_manager,
+                research_client
+            )
+            await research_agent.initialize()
+            agents["research"] = research_agent
+            print("✅ Research agent created with Anthropic provider (fallback)")
+        except Exception as e2:
+            print(f"❌ Could not initialize research agent with any provider: {e2}")
     
+    # Try to create planning agent with Anthropic
     try:
         planning_agent = PlanningAgent(
             "planning-001", 
@@ -99,9 +128,23 @@ async def create_agents(llm_factory: LLMProviderFactory,
         )
         await planning_agent.initialize()
         agents["planning"] = planning_agent
-        print("✅ Planning agent created and initialized")
+        print("✅ Planning agent created with Anthropic provider")
     except Exception as e:
-        print(f"⚠️  Could not initialize planning agent: {e}")
+        print(f"⚠️  Could not initialize planning agent with Anthropic: {e}")
+        
+        # Try fallback to OpenAI
+        try:
+            planning_agent = PlanningAgent(
+                "planning-001",
+                llm_factory.get_provider("openai"),
+                mcp_manager,
+                planning_client
+            )
+            await planning_agent.initialize()
+            agents["planning"] = planning_agent
+            print("✅ Planning agent created with OpenAI provider (fallback)")
+        except Exception as e2:
+            print(f"❌ Could not initialize planning agent with any provider: {e2}")
     
     return agents
 
@@ -117,6 +160,10 @@ async def create_agentic_system():
     
     # Create specialized agents
     agents = await create_agents(llm_factory, mcp_manager, registry)
+    
+    if not agents:
+        print("❌ No agents could be initialized. Please check your API keys.")
+        return None, None, {}, tool_manager
     
     # Setup orchestration
     router = AgentRouter(llm_factory, mcp_manager, system_a2a_client)
@@ -135,11 +182,24 @@ async def create_agentic_system():
     except Exception as e:
         print(f"⚠️  Could not start MCP server: {e}")
     
-    print("🎉 Modular Agentic System initialized successfully!")
+    # Show provider information
+    print("\n📊 Provider Information:")
+    active_providers = llm_factory.list_active_providers()
+    for provider_name in llm_factory.list_providers():
+        try:
+            info = llm_factory.get_provider_info(provider_name)
+            status = "🟢 ACTIVE" if provider_name in active_providers else "🔴 INACTIVE"
+            print(f"   {provider_name}: {status}")
+            print(f"      Model: {info['default_model']}")
+            print(f"      API Key: {'✅' if info['api_key_available'] else '❌'}")
+        except Exception as e:
+            print(f"   {provider_name}: ❌ ERROR - {e}")
+    
+    print(f"\n🎉 Modular Agentic System initialized successfully!")
     print(f"📊 System Status:")
     print(f"   - Agents: {len(agents)}")
     print(f"   - Tools: {len(tool_manager.list_tools())}")
-    print(f"   - LLM Providers: {len(llm_factory.list_providers())}")
+    print(f"   - LLM Providers: {len(active_providers)}")
     
     return conversation_manager, router, agents, tool_manager
 
@@ -206,7 +266,12 @@ async def main():
     """Main entry point"""
     try:
         # Create the system
-        conversation_manager, router, agents, tool_manager = await create_agentic_system()
+        system_result = await create_agentic_system()
+        if system_result[0] is None:  # conversation_manager is None
+            print("❌ System initialization failed. Exiting.")
+            return 1
+        
+        conversation_manager, router, agents, tool_manager = system_result
         
         # Check command line arguments or environment variables for demo mode
         demo_mode = os.getenv("DEMO_MODE", "false").lower() == "true"

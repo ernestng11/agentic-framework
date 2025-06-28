@@ -1,13 +1,15 @@
 llm_providers:
   openai:
-    api_key: ${OPENAI_API_KEY}
-    default_model: "gpt-4"
+    # API key automatically loaded from OPENAI_API_KEY environment variable
+    default_model: "gpt-4o"
     default_temperature: 0.7
+    fallback_models: ["gpt-4o-mini", "gpt-4o"]
   
   anthropic:
-    api_key: ${ANTHROPIC_API_KEY}
-    default_model: "claude-3-sonnet"
+    # API key automatically loaded from ANTHROPIC_API_KEY environment variable
+    default_model: "claude-3-sonnet-20240229"
     default_temperature: 0.7
+    fallback_models: ["claude-3-haiku-20240307", "claude-3-opus-20240229"]
 
 mcp_servers:
   - name: "file-system"
@@ -28,11 +30,13 @@ a2a_config:
 agents:
   research:
     llm_provider: "openai"
+    preferred_models: ["gpt-4o", "gpt-4o-mini"]
     capabilities: ["web_search", "data_analysis"]
     tools: ["web_search", "pdf_reader", "database_query"]
   
   planning:
     llm_provider: "anthropic"
+    preferred_models: ["claude-3-sonnet-20240229", "claude-3-haiku-20240307"]
     capabilities: ["task_decomposition", "workflow_planning"]
     tools: ["calendar", "project_management"]
 
@@ -42,6 +46,10 @@ system:
   host: "localhost"
   debug: false
   log_level: "INFO"
+  
+  # Provider validation on startup
+  validate_providers: true
+  require_all_providers: false  # Set to true if all providers must be available
 
 # Tool Configuration
 tools:
@@ -65,4 +73,13 @@ security:
   
   api_keys:
     required: true
-    validation: true 
+    validation: true
+    
+  # Provider-specific security settings
+  provider_security:
+    openai:
+      timeout: 30
+      max_retries: 3
+    anthropic:
+      timeout: 30
+      max_retries: 3 
